@@ -4,8 +4,10 @@ export default function HotspotPin({ hotspot, isActive, onSelect }) {
   return (
     <group position={hotspot.position}>
       <Html
-        distanceFactor={9}
-        zIndexRange={[10, 0]}
+        // Di eksterior pin mengecil/membesar mengikuti jarak; di interior kamera
+        // sangat dekat sehingga pin jadi raksasa, jadi dibuat ukuran tetap.
+        distanceFactor={hotspot.zone === 'interior' ? undefined : 9}
+        zIndexRange={[44, 41]}
         center
         style={{ pointerEvents: 'auto' }}
       >

@@ -52,6 +52,17 @@ const COLORS = {
   wheelDark: '#1c1c1c',
 }
 
+// Geometri atap (lihat komentar di <House>)
+const ROOF_RADIUS = 3.85
+const ROOF_BASE_HALF = ROOF_RADIUS * Math.SQRT1_2 // setengah sisi limas persegi
+const TRIM_BASE_HALF = 4.05 * Math.SQRT1_2
+const ROOF_HALF_X = 3.25 // rumah 6 m + overhang
+const ROOF_HALF_Z = 2.25 // rumah 4 m + overhang
+
+// Tinggi lantai jadi (atas pondasi). Lantai ruangan harus DI ATAS ini, kalau
+// tidak, permukaan atas pondasi menutupi lantai berwarna di dalam rumah.
+const FLOOR_Y = 0.17
+
 function WallSegment({ box, color = COLORS.partition }) {
   const { cx, cz, w, d } = boxToMesh(box)
   return (
@@ -79,7 +90,7 @@ function GarageCar() {
         [0.55, 0.16, -0.32],
         [0.55, 0.16, 0.32],
       ].map((p, i) => (
-        <mesh key={i} position={p} rotation={[0, 0, Math.PI / 2]} castShadow>
+        <mesh key={i} position={p} rotation={[Math.PI / 2, 0, 0]} castShadow>
           <cylinderGeometry args={[0.17, 0.17, 0.14, 14]} />
           <meshStandardMaterial color={COLORS.wheelDark} roughness={0.7} />
         </mesh>
@@ -144,15 +155,24 @@ export default function House({ garageOpen = false }) {
           <meshStandardMaterial color={COLORS.wallShade} roughness={0.9} />
         </mesh>
 
-        {/* Atap perisai (hip roof) */}
-        <mesh position={[0, 3.85, 0]} rotation={[0, roofRotationY, 0]} castShadow>
-          <coneGeometry args={[3.85, 1.7, 4]} />
-          <meshStandardMaterial color={COLORS.roof} roughness={0.75} side={THREE.DoubleSide} />
-        </mesh>
-        <mesh position={[0, 3.05, 0]} rotation={[0, roofRotationY, 0]}>
-          <coneGeometry args={[4.05, 0.16, 4]} />
-          <meshStandardMaterial color={COLORS.roofDark} roughness={0.8} />
-        </mesh>
+        {/* Atap perisai (hip roof).
+            coneGeometry 4-sisi yang diputar 45° menghasilkan limas PERSEGI;
+            rumahnya 6 x 4, jadi di-scale per-sumbu (di group, bukan di mesh,
+            supaya skala bekerja di sumbu dunia) agar menutupi seluruh rumah
+            dengan overhang 25 cm. Tepi limas = radius * cos(45°). */}
+        <group scale={[ROOF_HALF_X / ROOF_BASE_HALF, 1, ROOF_HALF_Z / ROOF_BASE_HALF]}>
+          <mesh position={[0, 3.85, 0]} rotation={[0, roofRotationY, 0]} castShadow>
+            <coneGeometry args={[ROOF_RADIUS, 1.7, 4]} />
+            <meshStandardMaterial color={COLORS.roof} roughness={0.75} side={THREE.DoubleSide} />
+          </mesh>
+        </group>
+        {/* List tipis di bawah atap */}
+        <group scale={[(ROOF_HALF_X + 0.08) / TRIM_BASE_HALF, 1, (ROOF_HALF_Z + 0.08) / TRIM_BASE_HALF]}>
+          <mesh position={[0, 3.05, 0]} rotation={[0, roofRotationY, 0]}>
+            <coneGeometry args={[4.05, 0.16, 4]} />
+            <meshStandardMaterial color={COLORS.roofDark} roughness={0.8} />
+          </mesh>
+        </group>
 
         {/* Cerobong */}
         <mesh position={[-2, 4.05, -1]} castShadow>
@@ -240,15 +260,15 @@ export default function House({ garageOpen = false }) {
         {/* ================= INTERIOR ================= */}
 
         {/* Lantai per-ruangan */}
-        <mesh position={[0, 0.015, 0.825]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <mesh position={[0, FLOOR_Y, 0.825]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[5.7, 2.05]} />
           <meshStandardMaterial color={COLORS.floorLiving} roughness={0.8} />
         </mesh>
-        <mesh position={[-1.175, 0.015, -1.025]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <mesh position={[-1.175, FLOOR_Y, -1.025]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[3.35, 1.65]} />
           <meshStandardMaterial color={COLORS.floorKitchen} roughness={0.7} />
         </mesh>
-        <mesh position={[1.675, 0.015, -1.025]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <mesh position={[1.675, FLOOR_Y, -1.025]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[2.35, 1.65]} />
           <meshStandardMaterial color={COLORS.floorBath} roughness={0.55} />
         </mesh>
@@ -323,7 +343,7 @@ export default function House({ garageOpen = false }) {
             <boxGeometry args={[0.9, 0.06, 0.42]} />
             <meshStandardMaterial color={COLORS.basinWhite} roughness={0.3} />
           </mesh>
-          <mesh position={[1.2, 1.55, -1.8]}>
+          <mesh position={[1.2, 1.55, -1.96]}>
             <boxGeometry args={[0.7, 0.55, 0.03]} />
             <meshStandardMaterial
               color={COLORS.mirrorGlass}
@@ -398,15 +418,18 @@ export default function House({ garageOpen = false }) {
         </group>
       </group>
 
-      {/* ---------- PANEL SURYA DI ATAP ---------- */}
-      <group position={[1.3, 3.55, -0.5]} rotation={[-0.42, 0, 0]}>
+      {/* ---------- PANEL SURYA DI ATAP ----------
+          Menempel di lereng DEPAN atap (permukaan: y = 4.7 - (1.7/2.25) * z).
+          Sudut lereng = atan(1.7 / 2.25) ≈ 0.6455 rad; sebelumnya panel berada
+          di bawah permukaan atap sehingga hampir tidak terlihat. */}
+      <group position={[1.0, 3.53, 1.62]} rotation={[0.6455, 0, 0]}>
         <mesh castShadow>
-          <boxGeometry args={[1.6, 0.04, 1.1]} />
+          <boxGeometry args={[1.4, 0.04, 0.9]} />
           <meshStandardMaterial color={COLORS.solar} roughness={0.3} metalness={0.5} />
         </mesh>
-        {[-0.55, -0.18, 0.18, 0.55].map((x, i) => (
+        {[-0.47, -0.16, 0.16, 0.47].map((x, i) => (
           <mesh key={i} position={[x, 0.025, 0]}>
-            <boxGeometry args={[0.02, 0.01, 1.1]} />
+            <boxGeometry args={[0.02, 0.01, 0.9]} />
             <meshStandardMaterial color={COLORS.solarLine} roughness={0.3} />
           </mesh>
         ))}

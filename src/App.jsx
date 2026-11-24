@@ -71,11 +71,12 @@ export default function App() {
     return rawActiveHotspot
   }, [rawActiveHotspot, garageOpen])
 
+  // Bergantung pada hotspot MENTAH (bukan activeHotspot), supaya membuka/menutup
+  // pintu garasi tidak ikut membuat kamera terbang balik ke titik garasi.
   const focusView = useMemo(() => {
-    if (!activeHotspot || activeHotspot.zone !== 'exterior') return null
-    return { camera: activeHotspot.camera, lookAt: activeHotspot.lookAt }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeHotspot, resetToken])
+    if (!rawActiveHotspot || rawActiveHotspot.zone !== 'exterior') return null
+    return { camera: rawActiveHotspot.camera, lookAt: rawActiveHotspot.lookAt }
+  }, [rawActiveHotspot])
 
   const handleEnterHouse = useCallback(() => {
     setInteriorView(true)
@@ -131,6 +132,7 @@ export default function App() {
       input.y = y
     }
     const onKeyDown = (e) => {
+      if (e.code.startsWith('Arrow')) e.preventDefault()
       keys.add(e.code)
       update()
     }
@@ -138,11 +140,19 @@ export default function App() {
       keys.delete(e.code)
       update()
     }
+    // Kalau jendela/tab kehilangan fokus saat tombol ditekan, keyup tidak pernah
+    // terkirim dan pemain akan terus berjalan sendiri — kosongkan semua tombol.
+    const onBlur = () => {
+      keys.clear()
+      update()
+    }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
       input.x = 0
       input.y = 0
     }
@@ -155,6 +165,7 @@ export default function App() {
         onSelect={handleSelect}
         autoRotate={autoRotate}
         focusView={focusView}
+        viewToken={resetToken}
         interiorView={interiorView}
         garageOpen={garageOpen}
         moveInputRef={moveInputRef}

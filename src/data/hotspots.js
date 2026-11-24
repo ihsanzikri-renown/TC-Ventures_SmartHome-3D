@@ -130,9 +130,9 @@ export const hotspots = [
       'Notifikasi performa panel',
       'Terintegrasi dengan baterai penyimpanan',
     ],
-    position: [1.3, 3.85, -0.5],
-    camera: [1.4, 5.6, 4.2],
-    lookAt: [1.3, 3.3, -0.5],
+    position: [1.0, 3.8, 1.7],
+    camera: [1.6, 5.4, 6.4],
+    lookAt: [1.0, 3.5, 1.6],
   },
 
   // ---------------- INTERIOR (dijelajahi first-person) ----------------
@@ -153,7 +153,7 @@ export const hotspots = [
       'Sinkron dengan speaker di seluruh ruangan',
       'Rekomendasi tontonan personal',
     ],
-    position: [-0.15, 1.55, -0.08],
+    position: [-1.3, 1.5, -0.06],
   },
   {
     id: 'kitchen-appliances',
@@ -172,7 +172,7 @@ export const hotspots = [
       'Kompor otomatis mati jika ditinggal',
       'Jadwal masak terhubung ke resep digital',
     ],
-    position: [-2.45, 1.1, -1.2],
+    position: [-2.6, 1.4, -0.2],
   },
   {
     id: 'bathroom-fixtures',

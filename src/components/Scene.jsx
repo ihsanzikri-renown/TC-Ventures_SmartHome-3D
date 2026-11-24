@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Grid, Environment, ContactShadows } from '@react-three/drei'
+import { OrbitControls, Grid, Environment, Lightformer, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 import House from './House'
 import HotspotPin from './HotspotPin'
@@ -10,32 +10,50 @@ import { hotspots, defaultView } from '../data/hotspots'
 const tmpCamTarget = new THREE.Vector3()
 const tmpLookTarget = new THREE.Vector3()
 
-function CameraRig({ focusView, autoRotate }) {
+function CameraRig({ focusView, autoRotate, viewToken }) {
   const controlsRef = useRef()
+  const flying = useRef(false)
   const { camera } = useThree()
 
+  // Setiap kali tujuan kamera berubah (pilih hotspot / tutup panel / tombol
+  // Reset), tentukan target baru lalu mulai animasi "terbang" ke sana.
   useEffect(() => {
     const view = focusView ?? defaultView
     tmpCamTarget.set(...view.camera)
     tmpLookTarget.set(...view.lookAt)
-  }, [focusView])
+    flying.current = true
+  }, [focusView, viewToken])
 
-  // Set the starting look-at point exactly once. We never pass `target` as a
-  // prop to <OrbitControls>, because a new array literal on every re-render
-  // would make it re-sync and fight the manual lerp below on every click.
+  // Set titik pandang awal sekali saja. `target` sengaja tidak dioper sebagai
+  // prop <OrbitControls>, karena array literal baru di tiap render akan memaksa
+  // sinkron ulang dan berebut dengan animasi di bawah.
+  // Begitu pengguna mulai menyeret / zoom, animasi terbang dibatalkan supaya
+  // kamera tidak "ditarik balik" ke posisi lama.
   useEffect(() => {
-    if (controlsRef.current) {
-      controlsRef.current.target.set(...defaultView.lookAt)
-      controlsRef.current.update()
+    const controls = controlsRef.current
+    if (!controls) return undefined
+    controls.target.set(...defaultView.lookAt)
+    controls.update()
+    const stopFlying = () => {
+      flying.current = false
     }
+    controls.addEventListener('start', stopFlying)
+    return () => controls.removeEventListener('start', stopFlying)
   }, [])
 
-  useFrame(() => {
-    camera.position.lerp(tmpCamTarget, 0.055)
-    if (controlsRef.current) {
-      controlsRef.current.target.lerp(tmpLookTarget, 0.055)
-      controlsRef.current.update()
+  useFrame((_, delta) => {
+    const controls = controlsRef.current
+    if (flying.current) {
+      // Redaman eksponensial -> kecepatan animasi sama di layar 60Hz maupun 144Hz.
+      const k = 1 - Math.exp(-4 * Math.min(delta, 0.1))
+      camera.position.lerp(tmpCamTarget, k)
+      controls?.target.lerp(tmpLookTarget, k)
+      const arrived =
+        camera.position.distanceTo(tmpCamTarget) < 0.01 &&
+        (!controls || controls.target.distanceTo(tmpLookTarget) < 0.01)
+      if (arrived) flying.current = false
     }
+    controls?.update()
   })
 
   return (
@@ -59,6 +77,7 @@ export default function Scene({
   onSelect,
   autoRotate,
   focusView,
+  viewToken,
   interiorView,
   garageOpen,
   moveInputRef,
@@ -84,7 +103,9 @@ export default function Scene({
         intensity={1.5}
         color="#fff3e0"
         castShadow
-        shadow-mapSize={[1024, 1024]}
+        shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.04}
         shadow-camera-left={-8}
         shadow-camera-right={8}
         shadow-camera-top={8}
@@ -92,7 +113,15 @@ export default function Scene({
       />
       <directionalLight position={[-6, 4, -6]} intensity={0.35} color="#4fd1c5" />
 
-      <Environment preset="city" environmentIntensity={0.35} />
+      {/* Environment dibuat prosedural (Lightformer), BUKAN preset="city":
+          preset itu mengunduh file .hdr dari CDN pihak ketiga; kalau diblokir /
+          offline, seluruh aplikasi jadi layar kosong. */}
+      <Environment resolution={256} environmentIntensity={0.35}>
+        <Lightformer form="rect" intensity={2.2} color="#fff3e0" position={[0, 6, 0]} rotation-x={Math.PI / 2} scale={[12, 12, 1]} />
+        <Lightformer form="rect" intensity={1.4} color="#ffd9a8" position={[-8, 3, 2]} rotation-y={Math.PI / 2} scale={[8, 4, 1]} />
+        <Lightformer form="rect" intensity={1.2} color="#8fd8ff" position={[8, 3, -2]} rotation-y={-Math.PI / 2} scale={[8, 4, 1]} />
+        <Lightformer form="ring" intensity={1.5} color="#4fd1c5" position={[0, 3, -9]} scale={4} />
+      </Environment>
 
       <Grid
         position={[0, 0, 0]}
@@ -131,7 +160,7 @@ export default function Scene({
       {interiorView ? (
         <FirstPersonRig active={interiorView} moveInputRef={moveInputRef} lookDeltaRef={lookDeltaRef} />
       ) : (
-        <CameraRig focusView={focusView} autoRotate={autoRotate} />
+        <CameraRig focusView={focusView} autoRotate={autoRotate} viewToken={viewToken} />
       )}
     </Canvas>
   )
